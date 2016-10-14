@@ -1,0 +1,65 @@
+﻿import unicodedata
+import string
+import urllib2
+from scrapy.spider import Spider
+from scrapy.selector import Selector
+from scrapy.contrib.spiders import CrawlSpider, Rule
+from scrapy.contrib.linkextractors.sgml import SgmlLinkExtractor
+from scrapy.http import HtmlResponse
+from lxml import etree
+import re
+
+from dirbot.items import Website
+
+def fn_text(self, str):
+    dr = re.compile(r'<[^>]+>',re.S)
+    dd = dr.sub('',str)
+    return dd
+
+class LJNewapmSpider(Spider):
+    name = "ljnewapm"
+    download_delay = 0.6
+    allowed_domains = ["http://sh.fang.lianjia.com"]
+    url = 'http://sh.fang.lianjia.com/loupan/pg$/'
+    print url
+    totalPage = 54
+    start_urls = []
+    for num in range(1, totalPage):
+        tmpstr = url.replace('$',('%d' %num))
+        print tmpstr
+        start_urls.append(tmpstr)
+
+    def parse(self, response):
+        sel = Selector(response)
+        #//*[@id="house-lst"]/li[1]/div[2]
+        #//*[@id="house-lst"]/li[2]/div[2]
+        sites = sel.xpath('//*[@id="house-lst"]/li')
+        items = []
+
+        for site in sites:
+            item = Website()
+            #//site.xpath('div[2]/div[1]/h2/a/text()').extract  - <a target="_blank" href="/loupan/p_aafmr/">国浩长风汇都</a>
+            #//*[@id="house-lst"]/li[1]/div[2]/div[1]/div[1]/span/text() - <span class="region">上海市普陀区金沙江路以南、泸定路以东、同普路以北</span>
+            #//*[@id="house-lst"]/li[1]/div[2]/div[1]/div[2]/text()   -<div class="area">5居/4居/3居-<span>150～225平米</span></div>
+            #//*[@id="house-lst"]/li[1]/div[2]/div[1]/div[3]/span/text() - <span>精装修</span>
+            #//*[@id="house-lst"]/li[1]/div[2]/div[1]/div[4]/span[1]/text() - <span class="onsold">在售</span>
+            #//*[@id="house-lst"]/li[1]/div[2]/div[1]/div[4]/span[2]/text() - <span class="live">普通住宅</span>
+            #//*[@id="house-lst"]/li[1]/div[2]/div[2]/div/div[1]
+            #case 1: 均价待定
+            #case 2: <div class="average">均价<span class="num">28000</span>元/平</div>
+
+            dr = re.compile(r'<[^>]+>',re.S)
+            item['loupan'] = site.xpath('div[2]/div[1]/h2/a/text()').extract()
+            item['location'] = string.join(site.xpath('div[2]/div[1]/div[1]/span/text()').extract()).strip()
+            housetype = string.join(site.xpath('div[2]/div[1]/div[2]').extract())
+            item['housetype'] = dr.sub('',housetype).strip()
+            item['decoration'] = site.xpath('div[2]/div[1]/div[3]/span/text()').extract()
+            item['onsold'] = site.xpath('div[2]/div[1]/div[4]/span[1]/text()').extract()
+            item['live'] = site.xpath('div[2]/div[1]/div[4]/span[2]/text()').extract()
+            avgprice = string.join(site.xpath('div[2]/div[2]/div/div[1]').extract())
+            item['avgprice'] = dr.sub('',avgprice).strip()
+            items.append(item)
+
+        return items
+
+
